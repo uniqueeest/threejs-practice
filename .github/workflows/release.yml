@@ -1,0 +1,62 @@
+name: 01.프로덕션 배포 | soaf (vercel)
+
+run-name: deploy-soaf@web | ${{ github.sha }}
+
+concurrency:
+  group: deploy-soaf@web-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_SOAF_WEB }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID_SOAF }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_SOAF }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (pnpm)
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@39.2.2
+
+      - name: Pull Vercel Environment (production)
+        run: vercel pull --yes --environment=production --token=${{ env.VERCEL_TOKEN }}
+
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ env.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel (production)
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ env.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: |
+          echo '### Deployment' >> $GITHUB_STEP_SUMMARY
+          echo 'Production URL:' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.deploy.outputs.url }}' >> $GITHUB_STEP_SUMMARY
